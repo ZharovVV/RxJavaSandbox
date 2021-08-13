@@ -4,7 +4,10 @@ import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
+import android.view.View.GONE
+import android.view.View.VISIBLE
 import android.view.ViewGroup
+import android.widget.ProgressBar
 import android.widget.TextView
 import com.github.zharovvv.rxjavasandbox.R
 import io.reactivex.Observable
@@ -16,6 +19,10 @@ import io.reactivex.rxkotlin.plusAssign
 import io.reactivex.schedulers.Schedulers
 
 class MainFragment : RetainFragment() {
+
+    companion object {
+        private const val LOG_RX_JAVA_TAG = "RxJava"
+    }
 
     private val timerObservable: Observable<String>
 
@@ -61,6 +68,8 @@ class MainFragment : RetainFragment() {
      */
     private val hotTimerObservable: ConnectableObservable<String>
 
+    private lateinit var progressBar: ProgressBar
+
     private lateinit var coldTextView: TextView
     private lateinit var hotTextView: TextView
     private lateinit var coldDisposable: Disposable
@@ -73,22 +82,37 @@ class MainFragment : RetainFragment() {
 //        Observable.fromIterable(listOf(1, 2, 3, 4, 5))
         timerObservable =
             Observable.create<Int> { emitter ->   //крайне не желательно использовть create для создания Observable
+                Log.i(LOG_RX_JAVA_TAG, "emitter thread: ${Thread.currentThread().name}")
                 for (i in 1..10) {
                     emitter.onNext(i)
                 }
                 emitter.onComplete()
             }
                 .doOnSubscribe {
-                    Thread.sleep(1000)
+                    Log.i(
+                        LOG_RX_JAVA_TAG,
+                        "#doOnSubscribe; thread: ${Thread.currentThread().name}"
+                    ) //#doOnSubscribe; thread: RxCachedThreadScheduler-2
+                    Thread.sleep(2000)
+//                    showLoadingIndicator()
+//                     - при размещении здесь данного метода в случае
+//                    hot observable для подписчиков будет вызван метод onError,
+//                    в который будет передано исключение CalledFromWrongThreadException(
+//                    "Only the original thread that created a view hierarchy can touch its views.")
                 }
                 .doOnNext {
+                    Log.i(LOG_RX_JAVA_TAG, "#doOnNext; thread: ${Thread.currentThread().name}")
                     Thread.sleep(1000)
                 }
                 .doOnComplete {
+                    Log.i(LOG_RX_JAVA_TAG, "#doOnComplete; thread: ${Thread.currentThread().name}")
                     Thread.sleep(1000)
                 }
                 .doOnError {
 
+                }
+                .doOnTerminate {
+                    Log.i(LOG_RX_JAVA_TAG, "#doOnTerminate; thread: ${Thread.currentThread().name}")
                 }
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -96,7 +120,14 @@ class MainFragment : RetainFragment() {
         coldTimerObservable = timerObservable
         /**
          * Есть способы превратить холодные Observable в горячие и наоборот.
-         * Холодные объекты становятся горячими из-за publish() оператора.
+         * * Холодные объекты становятся горячими из-за publish() оператора.
+         * * Используя Subject (можем не только преобразовать холодное в горячее наблюдаемое, но также можем создать горячее наблюдаемое с нуля)
+         * Because a Subject subscribes to an Observable,
+         * it will trigger that Observable to begin emitting items
+         * (if that Observable is “cold” — that is, if it waits for a subscription before
+         * it begins to emit items). This can have the effect of making the resulting Subject
+         * a “hot” Observable variant of the original “cold” Observable.
+         * [http://reactivex.io/documentation/subject.html]
          */
         hotTimerObservable = timerObservable.publish()
 
@@ -165,6 +196,7 @@ class MainFragment : RetainFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         coldTextView = view.findViewById(R.id.cold_text_view)
         hotTextView = view.findViewById(R.id.hot_text_view)
+        progressBar = view.findViewById(R.id.progress_bar_indicator)
         subscribeOnTimer()
     }
 
@@ -178,20 +210,29 @@ class MainFragment : RetainFragment() {
              */
             .subscribe(
                 { observableNumber: String ->
+                    Log.i(
+                        LOG_RX_JAVA_TAG,
+                        "#onNext; observableValue: $observableNumber thread: ${Thread.currentThread().name}"
+                    )
                     coldTextView.apply {
                         text = observableNumber
                     }
                 },
                 { throwable ->
                     coldTextView.apply {
-                        Log.e("observableError", throwable.message ?: "null")
+                        Log.e(LOG_RX_JAVA_TAG, "cold observable; throwable: ${throwable.message}")
                         text = throwable.message
                     }
                 },
                 {
+                    Log.i(LOG_RX_JAVA_TAG, "#onComplete; thread: ${Thread.currentThread().name}")
                     coldTextView.apply {
                         text = "Complete"
                     }
+                    hideLoadingIndicator()
+                },
+                {
+                    showLoadingIndicator()
                 }
             )
 
@@ -202,7 +243,12 @@ class MainFragment : RetainFragment() {
                         text = observableNumber
                     }
                 },
-                {},
+                { throwable ->
+                    Log.e(LOG_RX_JAVA_TAG, "hot observable; throwable: ${throwable.message}")
+                    hotTextView.apply {
+                        text = throwable.message
+                    }
+                },
                 {
                     hotTextView.apply {
                         text = "Complete"
@@ -217,6 +263,14 @@ class MainFragment : RetainFragment() {
          */
         compositeDisposable += coldDisposable
         compositeDisposable += hotDisposable
+    }
+
+    private fun showLoadingIndicator() {
+        progressBar.visibility = VISIBLE
+    }
+
+    private fun hideLoadingIndicator() {
+        progressBar.visibility = GONE
     }
 
     override fun onDestroy() {
