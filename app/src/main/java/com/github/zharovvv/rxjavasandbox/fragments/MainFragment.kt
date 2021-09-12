@@ -91,7 +91,7 @@ class MainFragment : RetainFragment() {
                 .doOnSubscribe {
                     Log.i(
                         LOG_RX_JAVA_TAG,
-                        "#doOnSubscribe; thread: ${Thread.currentThread().name}"
+                        "1#doOnSubscribe; thread: ${Thread.currentThread().name}"
                     ) //#doOnSubscribe; thread: RxCachedThreadScheduler-2
                     Thread.sleep(2000)
 //                    showLoadingIndicator()
@@ -101,22 +101,32 @@ class MainFragment : RetainFragment() {
 //                    "Only the original thread that created a view hierarchy can touch its views.")
                 }
                 .doOnNext {
-                    Log.i(LOG_RX_JAVA_TAG, "#doOnNext; thread: ${Thread.currentThread().name}")
-                    Thread.sleep(1000)
+                    Log.i(LOG_RX_JAVA_TAG, "1#doOnNext; thread: ${Thread.currentThread().name}")
+                    Thread.sleep(1000)  //1#doOnNext; thread: RxCachedThreadScheduler-2
                 }
                 .doOnComplete {
-                    Log.i(LOG_RX_JAVA_TAG, "#doOnComplete; thread: ${Thread.currentThread().name}")
-                    Thread.sleep(1000)
+                    Log.i(LOG_RX_JAVA_TAG, "1#doOnComplete; thread: ${Thread.currentThread().name}")
+                    Thread.sleep(1000)  //1#doOnComplete; thread: RxCachedThreadScheduler-2
                 }
                 .doOnError {
 
                 }
                 .doOnTerminate {
-                    Log.i(LOG_RX_JAVA_TAG, "#doOnTerminate; thread: ${Thread.currentThread().name}")
+                    Log.i(LOG_RX_JAVA_TAG, "1#doOnTerminate; thread: ${Thread.currentThread().name}")
+                    //1#doOnTerminate; thread: RxCachedThreadScheduler-2
                 }
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .observeOn(AndroidSchedulers.mainThread())  //       <---------------
                 .map(Int::toString)
+                .doOnSubscribe {
+                    Log.i(
+                        LOG_RX_JAVA_TAG,
+                        "2#doOnSubscribe; thread: ${Thread.currentThread().name}"
+                    )   //2#doOnSubscribe; thread: main
+                }.doOnNext {
+                    Log.i(LOG_RX_JAVA_TAG, "2#doOnNext; thread: ${Thread.currentThread().name}")
+                    //2#doOnNext; thread: main
+                }
         coldTimerObservable = timerObservable
         /**
          * Есть способы превратить холодные Observable в горячие и наоборот.
