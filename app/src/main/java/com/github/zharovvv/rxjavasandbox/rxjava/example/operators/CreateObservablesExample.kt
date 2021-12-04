@@ -3,6 +3,10 @@ package com.github.zharovvv.rxjavasandbox.rxjava.example.operators
 import io.reactivex.Observable
 import io.reactivex.ObservableEmitter
 import io.reactivex.ObservableOnSubscribe
+import io.reactivex.ObservableSource
+import io.reactivex.schedulers.Schedulers
+import java.util.concurrent.Callable
+import java.util.concurrent.TimeUnit
 
 @Suppress("ObjectLiteralToLambda")
 class CreateObservablesExample {
@@ -50,6 +54,21 @@ class CreateObservablesExample {
     }
 
     /**
+     * Создание Observable через just.
+     */
+    fun createByJust() {
+        //Оператор just имеет перегруженные версии. Если элементов > 1, то под капотом будет
+        // вызываться Observable.fromArray.
+        // Если элементов == 1, то происходит следующее:
+        val observable = Observable.just(1)
+        /*
+        1. Создается объект ObservableJust<T>
+        2. В конструктор этого объекта передается значение T и сохраняется в поле value.
+        3. Пункт аналогичен пункту 3 для createFromEmitter.
+         */
+    }
+
+    /**
      * Создание Observable через fromArray.
      */
     fun createByFromArray() {
@@ -65,18 +84,111 @@ class CreateObservablesExample {
     }
 
     /**
-     * Создание Observable через just.
+     * Создание Observable через fromCallable
+     * Также есть другие операторы группы from:
+     * [Observable.fromFuture], [Observable.fromIterable], [Observable.fromPublisher].
      */
-    fun createByJust() {
-        //Оператор just имеет перегруженные версии. Если элементов > 1, то под капотом будет
-        // вызываться Observable.fromArray.
-        // Если элементов == 1, то происходит следующее:
-        val observable = Observable.just(1)
+    fun createByFromCallable() {
+        fun longOperation(): Int {
+            try {
+                Thread.sleep(1000L)
+                return 1
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw e
+            }
+        }
+
         /*
-        1. Создается объект ObservableJust<T>
-        2. В конструктор этого объекта передается значение T и сохраняется в поле value.
-        3. Пункт аналогичен пункту 3 для createFromEmitter.
+        Все аналогично.
+        Создается объект ObservableFromCallable<T> в его поле callable сохраняется Callable<T>.
          */
+        val observable = Observable.fromCallable(
+            object : Callable<Int> {
+                override fun call(): Int {
+                    return longOperation()
+                }
+            }
+        )
     }
 
+    /**
+     * Операторы Empty, Never и Throw (В контексте RxJava это оператор error) генерируют Observables
+     * с очень специфическим и ограниченным поведением. Они полезны для целей тестирования,
+     * а иногда также для объединения с другими наблюдаемыми объектами
+     * или в качестве параметров для операторов,
+     * которые ожидают другие наблюдаемые объекты в качестве параметров.
+     */
+    fun createByEmptyNeverThrow() {
+        //После подписки сразу вызывает у наблюдателя onComplete
+        val emptyObservable = Observable.empty<Int>()
+        //Создает Observable, который не испускает никаких элементов и не завершается
+        val neverObservable = Observable.never<Int>()
+        //Создает Observable, который не испускает никаких элементов и завершается с ошибкой
+        val throwObservable = Observable.error<Int>(IllegalArgumentException())
+    }
+
+    /**
+     * Создает Observable<Long>, который будет испускать последовательность Long, начиная с 0L,
+     * через заданые промежутки времени.
+     */
+    fun createByInterval() {
+        val initialDelay =
+            1000L //начальное время задержки для ожидания перед выдачей первого значения 0L
+        val period = 1500L
+        val unit = TimeUnit.MILLISECONDS
+        val scheduler = // Планировщик, на котором происходит ожидание и отправляются элементы
+            Schedulers.computation()    //По умолчанию используется именно этот Scheduler.
+        val observable: Observable<Long> = Observable.interval(
+            initialDelay, period, unit, scheduler
+        )
+    }
+
+    /**
+     * Создает Observable<Int> начиная от n элемента до n + m - 1,
+     * где n - начальный элемент, m - общее количество элементов.
+     */
+    fun createByRange() {
+        val n = 3
+        val count = 100
+        val observable: Observable<Int> = Observable.range(n, count)    //В данном случае
+        // сгенерируется последовательность от 3 до 102.
+    }
+
+    /**
+     * Возвращает Observable, который повторяет последовательность элементов,
+     * отправленных источником ObservableSource, заданное количество раз.
+     */
+    fun createByRepeat() {
+        val sourceObservable: Observable<Int> = Observable.range(0, 10)
+        val repeatObservable = sourceObservable.repeat()    //Под капотом repeat(Long.MAX_VALUE)
+    }
+
+    /**
+     * Возвращает Observable<Long>, который излучает 0L после указанной задержки
+     * в указанном планировщике, а затем завершается.
+     */
+    fun createByTimer() {
+        val timerObservable: Observable<Long> =
+            Observable.timer(1000L, TimeUnit.MILLISECONDS, Schedulers.computation())
+    }
+
+    /**
+     * Позволяет отложить создание Observable до тех пор, пока на него него не подпишутся.
+     * То есть в момент подписки будет создаваться новый (актуальный) инстанс Observable.
+     * Пример: [https://blog.danlew.net/2015/07/23/deferring-observable-code-until-subscription-in-rxjava/]
+     */
+    fun createByDefer() {
+        //В примере ниже каждый раз при новой подписке будет создаваться новый Observable
+        //как следствие каждому новому подписчику будет приходить уникальное число.
+        val deferObservable: Observable<Int> = Observable.defer(
+            object : Callable<ObservableSource<Int>> {
+                override fun call(): ObservableSource<Int> {
+                    return Observable.just((Math.random() * 10).toInt())
+                }
+            }
+        )
+        //В примере ниже всем подписчикам придет одно и то же число.
+        val simpleObservable: Observable<Int> = Observable.just((Math.random() * 10).toInt())
+    }
 }
