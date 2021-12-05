@@ -1,9 +1,10 @@
 package com.github.zharovvv.rxjavasandbox.rxjava.example.work.description
 
-import io.reactivex.Observable
-import io.reactivex.Observer
+import io.reactivex.*
 import io.reactivex.disposables.Disposable
+import org.reactivestreams.Subscription
 
+@Suppress("ObjectLiteralToLambda")
 class WorkDescription {
 
     /**
@@ -55,5 +56,86 @@ class WorkDescription {
         // Он сохраняет Disposable, переданный в onSubscribe в AtomicReference<Disposable>.
         // При вызове у LambdaObserver.dispose из AtomicReference<Disposable> достается
         // исходный Disposable, который сразу диспоузится.
+    }
+
+    fun simpleFlowableWork() {
+        /*
+        1. Создается объект FlowableCreate, в конструктор которого передается
+        FlowableOnSubscribe<T> source и BackpressureStrategy backpressure.
+         */
+        val flowable: Flowable<Int> = Flowable.create(
+            object : FlowableOnSubscribe<Int> {
+                override fun subscribe(emitter: FlowableEmitter<Int>) {
+                    try {
+                        emitter.onNext(1)
+                        emitter.onNext(2)
+                        emitter.onNext(3)
+                        emitter.onNext(4)
+                        emitter.onNext(5)
+                        emitter.onComplete()
+                    } catch (e: Exception) {
+                        emitter.onError(e)
+                    }
+                }
+            },
+            BackpressureStrategy.DROP
+        )
+        val flowableSubscriber: FlowableSubscriber<Int> = object : FlowableSubscriber<Int> {
+            private lateinit var subscription: Subscription
+            override fun onSubscribe(s: Subscription) {
+                subscription = s
+                s.request(1L)
+            }
+
+            override fun onNext(t: Int?) {
+                println(t)
+                subscription.request(1L)
+            }
+
+            override fun onError(t: Throwable?) {
+                subscription.cancel()
+                println(t?.message)
+            }
+
+            override fun onComplete() {
+                subscription.cancel()
+            }
+        }
+        /*
+        2. у FlowableCreate вызывается метод subscribeActual
+        3. В зависимости от типа BackpressureStrategy создается соответствующий эмиттер.
+        В нашем случае создается DropAsyncEmitter, в конструктор которого передается Subscriber.
+        4. Затем у подписчика вызывается onSubscribe, в который передается BaseEmitter.
+        (В нашем случае это DropAsyncEmitter, который также реализует интерфейс Subscription)
+        5. В нашей реализации FlowableSubscriber.onSubscribe мы вызываем subscription.request(1L)
+        6. У DropAsyncEmitter вызывается метод request, внутри которого в AtomicLong сохраняется значение 1L.
+        (на самом деле там под капотом значение прибавляется к текущему, если оно конечно есть; так как нет, то просто устанавливается значение 1L)
+        7. Далее вызывается FlowableOnSubscribe source.subscribe(BaseEmitter)
+        8. В нашей реализзации FlowableOnSubscribe мы сразу вызываем emitter.onNext(..)
+        9. DropAsyncEmitter onNext имеет следующую реализацию:
+        @Override
+        public final void onNext(T t) {
+            if (isCancelled()) {
+                return;
+            }
+
+            if (t == null) {
+                onError(new NullPointerException("onNext called with null. Null values are generally not allowed in 2.x operators and sources."));
+                return;
+            }
+            //Далее проверяется AtomicLong (сколько элементов запросил подписчик в последний раз)
+            if (get() != 0) {   //То есть если бы мы ранее не вызвали  subscription.request(1L), то был бы вызван сразу onOverflow().
+                downstream.onNext(t);   //FlowableSubscriber.onNext(t)
+                BackpressureHelper.produced(this, 1);   //Уменьшает счетчик на 1
+            } else {
+                onOverflow();
+            }
+        }
+        10. Так как мы в onNext нашего подписчика каждый раз вызываем subscription.request(1L) (то есть увеличиваем счетчик на 1)
+        то подписчик получит все элементы.
+        11. У эмиттера вызовется onComplete(), внутри которого вызовется onComplete() уже у самого подписчика.
+        12. Все
+         */
+        flowable.subscribe(flowableSubscriber)
     }
 }
