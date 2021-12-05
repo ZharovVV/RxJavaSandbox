@@ -32,10 +32,10 @@ class CreateObservablesExample {
                         emitter.onNext(2)
                         emitter.onNext(3)
                         emitter.onNext(4)
+                        emitter.onComplete()
                     } catch (e: Exception) {
                         emitter.onError(e)
                     }
-                    emitter.onComplete()
                 }
             }
         )
@@ -174,7 +174,7 @@ class CreateObservablesExample {
     }
 
     /**
-     * Позволяет отложить создание Observable до тех пор, пока на него него не подпишутся.
+     * Позволяет отложить создание Observable до тех пор, пока на него не подпишутся.
      * То есть в момент подписки будет создаваться новый (актуальный) инстанс Observable.
      * Пример: [https://blog.danlew.net/2015/07/23/deferring-observable-code-until-subscription-in-rxjava/]
      */

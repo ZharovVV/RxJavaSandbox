@@ -1,5 +1,6 @@
 package com.github.zharovvv.rxjavasandbox.rxjava.example.observables
 
+import com.github.zharovvv.rxjavasandbox.rxjava.example.operators.CreateObservablesExample
 import io.reactivex.*
 import io.reactivex.disposables.Disposable
 import org.reactivestreams.Subscription
@@ -7,6 +8,7 @@ import org.reactivestreams.Subscription
 class ObservablesType {
 
     /**
+     * См. [CreateObservablesExample.createFromEmitter]
      * Observable push-ит элементы в Observer-а
      */
     fun observable() {
@@ -102,7 +104,11 @@ class ObservablesType {
     }
 
     /**
-     * TODO Описание
+     * В отличие от Observable (который реализует интерфейс ObservableSource с методом
+     *     void subscribe(@NonNull Observer<? super T> observer)),
+     * Flowable реализует интерфейс Publisher с методом
+     *     public void subscribe(Subscriber<? super T> s);
+     * TODO Более подробное описание + сравнение с Observable.
      * FlowableSubscriber тянет (pull) элементы из Flowable.
      */
     fun flowable() {
@@ -111,10 +117,24 @@ class ObservablesType {
             private lateinit var subscription: Subscription
             override fun onSubscribe(s: Subscription) {
                 subscription = s
-                s.request(Long.MAX_VALUE)   //Без вызова Subscription.request подписчик не начнет получать элементы.
+                //Издатель не отправляет никаких событий, пока через этот метод не поступит сигнал о потребности.
+                //Его можно вызывать сколько угодно часто и всякий раз, когда это необходимо,
+                //но непогашенный совокупный спрос никогда не должен превышать Long.MAX_VALUE.
+                //Непогашенный совокупный спрос Long.MAX_VALUE может рассматриваться
+                //Издателем как «фактически неограниченный».
+                //Все, что было запрошено, может быть отправлено издателем,
+                //поэтому только сигнализирует о спросе на то, что может быть безопасно обработано.
+                //Издатель может отправить меньше, чем запрошено, если поток заканчивается,
+                //но затем должен выдать либо Subscriber.onError (Throwable), либо Subscriber.onComplete().
+                //Параметры:
+                //n - строго положительное количество элементов для запросов к вышестоящему издателю
+//                s.request(Long.MAX_VALUE)   //Без вызова Subscription.request подписчик не начнет получать элементы.
+                s.request(1)
             }
 
             override fun onNext(t: Int?) {
+                //handle onNext
+                subscription.request(1)
             }
 
             override fun onError(t: Throwable?) {
@@ -126,5 +146,14 @@ class ObservablesType {
             }
         }
         flowable.subscribe(flowableSubscriber)
+        //Если вызвать вариант метода subscribe с консьюмерами и без консьюмера onSubscribe
+        //то в качестве консьюмера onSubscribe будет передан объект:
+        //public enum RequestMax implements Consumer<Subscription> {
+        //        INSTANCE;
+        //        @Override
+        //        public void accept(Subscription t) throws Exception {
+        //            t.request(Long.MAX_VALUE);
+        //        }
+        //    }
     }
 }
