@@ -1,6 +1,7 @@
 package com.github.zharovvv.rxjavasandbox.rxjava.example.work.description
 
 import io.reactivex.*
+import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
 import org.reactivestreams.Subscription
@@ -161,6 +162,9 @@ class WorkDescription {
     fun subscribeOnWorkExample() {
         val disposable: Disposable = Observable.fromArray(1, 2, 3, 4, 5)
             .subscribeOn(Schedulers.computation())
+            //observeOn() – задает Scheduler, на котором выполняются операторы, следующие после observeOn().
+            //В Rx-стриме может быть несколько observeOn(), каждый из которых будет менять поток выполнения.
+            .observeOn(AndroidSchedulers.mainThread())
             .subscribe { t ->
                 val thread = Thread.currentThread()
                 println("Current thread: $thread; $t")
