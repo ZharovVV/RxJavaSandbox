@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.ProgressBar
 import android.widget.TextView
 import com.github.zharovvv.rxjavasandbox.R
+import com.github.zharovvv.rxjavasandbox.rxjava.example.operators.DoOnOperatorsExample
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
@@ -112,7 +113,10 @@ class MainFragment : RetainFragment() {
 
                 }
                 .doOnTerminate {
-                    Log.i(LOG_RX_JAVA_TAG, "1#doOnTerminate; thread: ${Thread.currentThread().name}")
+                    Log.i(
+                        LOG_RX_JAVA_TAG,
+                        "1#doOnTerminate; thread: ${Thread.currentThread().name}"
+                    )
                     //1#doOnTerminate; thread: RxCachedThreadScheduler-2
                 }
                 .subscribeOn(Schedulers.io())
@@ -208,6 +212,8 @@ class MainFragment : RetainFragment() {
         hotTextView = view.findViewById(R.id.hot_text_view)
         progressBar = view.findViewById(R.id.progress_bar_indicator)
         subscribeOnTimer()
+        val doOnOperatorsExample = DoOnOperatorsExample()
+        doOnOperatorsExample.doOnExample()
     }
 
     private fun subscribeOnTimer() {
