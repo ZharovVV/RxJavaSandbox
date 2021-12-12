@@ -2,6 +2,7 @@ package com.github.zharovvv.rxjavasandbox.rxjava.example.work.description
 
 import io.reactivex.*
 import io.reactivex.disposables.Disposable
+import io.reactivex.schedulers.Schedulers
 import org.reactivestreams.Subscription
 
 @Suppress("ObjectLiteralToLambda")
@@ -137,5 +138,33 @@ class WorkDescription {
         12. Все
          */
         flowable.subscribe(flowableSubscriber)
+    }
+
+    /**
+     * [Observable.subscribeOn] - задает Scheduler, на котором выполняется подписка на Observable,
+     * и имеет эффект от создания Observable и вниз по цепочке вызовов RxJava до первого observeOn().
+     * Это поведение обусловлено реализацией оператора subscribeOn():
+     * - 1. При вызове Observable.subscribeOn() создается объект класса ObservableSubscribeOn,
+     * который является наследником Observable и выступает в качестве враппера для оригинального observable.
+     * - 2. Когда на observable вызывается метод subscribe(),
+     * вызов делегируется в абстрактный метод subscribeActual() класса Observable,
+     * который реализован в ObservableSubscribeOn.
+     * - 3. В методе subscribeActual() вызывается scheduleDirect() на объекте типа Scheduler,
+     * который был передан аргументом в оператор subscribeOn().
+     * Параметром метода scheduleDirect() передается Runnable,
+     * в котором вызывается source.subscribe(), где source – это оригинальный Observable.
+     *
+     * Из такой реализации следует, что все что делает subscribeOn() – это создание класса-враппера,
+     * который делегирует вызов subscribe() на оригинальный Observable,
+     * со сменой треда на переданный шедулер.
+     */
+    fun subscribeOnWorkExample() {
+        val disposable: Disposable = Observable.fromArray(1, 2, 3, 4, 5)
+            .subscribeOn(Schedulers.computation())
+            .subscribe { t ->
+                val thread = Thread.currentThread()
+                println("Current thread: $thread; $t")
+            }
+
     }
 }
